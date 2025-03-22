@@ -1,101 +1,360 @@
-import Image from "next/image";
+"use client";
+
+import mermaid from "mermaid";
+import { useEffect, useRef, useState } from "react";
+import { AppSidebar } from "@/components/app-sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { Separator } from "@/components/ui/separator";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
+import ReactCodeMirror, {
+  basicSetup,
+  EditorState,
+} from "@uiw/react-codemirror";
+import { langs } from "@uiw/codemirror-extensions-langs";
+import { mermaid as mermaidLang } from "codemirror-lang-mermaid";
+import { useIndexedDb } from "@/data/local/use-indexed-db";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Diagram } from "@/data/models/diagram";
+import { Stores } from "@/data/local/indexed-db";
+import { Button } from "@/components/ui/button";
+import { Save, Slash, Store, Upload } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  TransformWrapper,
+  TransformComponent,
+  ReactZoomPanPinchContentRef,
+} from "react-zoom-pan-pinch";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { CreateDiagramDialog } from "@/components/diagrams/create-diagram-dialog";
+import { DiagramErrorAlert } from "@/components/diagrams/diagram-error-alert";
+import {
+  indentOnInput,
+  indentUnit,
+  syntaxHighlighting,
+} from "@codemirror/language";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { SAVE_STATUS } from "@/constants/diagram-constant";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  CodeEditorPanel,
+  DiagramPanel,
+} from "@/components/diagrams/diagram-panel";
+
+const defaultDiagram = `graph LR
+  A --- B
+  B-->C[fa:fa-ban forbidden]
+  B-->D(fa:fa-spinner);`;
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [markdown, setMarkdown] = useState(defaultDiagram);
+  const diagramContainer = useRef<HTMLDivElement>(null);
+  const transformWrapper = useRef<ReactZoomPanPinchContentRef>(null);
+  const { getDataByKey, updateData, insertData, isDbLoaded } = useIndexedDb();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const searchParams = useSearchParams();
+  const diagramId = searchParams.get("id");
+  const isMobile = useIsMobile();
+
+  const [diagramTitle, setDiagramTitle] = useState<string>("Untitled Diagram");
+  const [diagram, setDiagram] = useState<Diagram>();
+  // const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveStatus, setSaveStatus] = useState("");
+  const [folderTitle, setFolderTitle] = useState<string>("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [diagramError, setDiagramError] = useState("");
+  const [isAutoSave, setIsAutoSave] = useState(true);
+  const [autoSaveTimer, setAutoSaveTimer] = useState<
+    NodeJS.Timeout | undefined
+  >();
+
+  const router = useRouter();
+
+  mermaid.initialize({ startOnLoad: false });
+
+  useEffect(() => {
+    const renderDiagram = async () => {
+      if (markdown) {
+        try {
+          if (await mermaid.parse(markdown, { suppressErrors: false })) {
+            setDiagramError("");
+            return mermaid.render("diagram", markdown);
+          }
+
+          return null;
+        } catch (err: any) {
+          setDiagramError(err.message);
+        }
+      } else {
+        return null;
+      }
+    };
+
+    setSaveStatus("");
+
+    renderDiagram().then((diagram) => {
+      if (diagram && diagramContainer.current) {
+        diagramContainer.current.innerHTML = diagram.svg;
+      } else if (markdown == "" && diagramContainer.current) {
+        diagramContainer.current.innerHTML = "";
+      }
+    });
+
+    if (isAutoSave) {
+      handleAutoSave();
+    }
+  }, [markdown]);
+
+  useEffect(() => {
+    if (!diagramId) {
+      setDefault();
+    } else {
+      setIsAutoSave(true);
+    }
+
+    if (diagramId && isDbLoaded) {
+      getDiagram(diagramId);
+
+      setTimeout(() => {
+        if (transformWrapper.current) {
+          const svgElement = diagramContainer.current?.querySelector("svg");
+          const scale = svgElement
+            ? svgElement.getBBox().width / svgElement.clientWidth
+            : 1;
+
+          transformWrapper.current.centerView(scale, 0);
+        }
+      }, 100);
+    }
+  }, [diagramId, isDbLoaded]);
+
+  const getDiagram = (key: string) => {
+    getDataByKey<Diagram>(Stores.Diagrams, key).then((diagram) => {
+      if (diagram) {
+        setMarkdown(diagram.content);
+        setDiagramTitle(diagram.title);
+        setDiagram(diagram);
+        if (diagram.parentId) {
+          getDataByKey<Diagram>(Stores.Diagrams, diagram.parentId).then(
+            (parent) => {
+              if (parent) {
+                setFolderTitle(parent.title);
+              }
+            }
+          );
+        } else {
+          setFolderTitle("");
+        }
+      }
+    });
+  };
+
+  const handleSave = () => {
+    if (!diagramId) {
+      setCreateDialogOpen(true);
+    } else if (diagramId && diagram) {
+      const newDiagram = { ...diagram, content: markdown };
+      setSaveStatus(SAVE_STATUS.SAVING);
+      updateData(Stores.Diagrams, newDiagram).then(() =>
+        setSaveStatus(SAVE_STATUS.SAVED)
+      );
+    }
+  };
+
+  const handleAutoSave = () => {
+    clearTimeout(autoSaveTimer);
+
+    const newTimer = setTimeout(() => {
+      handleSave();
+    }, 500);
+
+    setAutoSaveTimer(newTimer);
+  };
+
+  const setDefault = () => {
+    setMarkdown(defaultDiagram);
+    setDiagramTitle("Untitled Diagram");
+    setIsAutoSave(false);
+  };
+
+  const insertDiagram = (diagram: Diagram) => {
+    diagram.content = markdown;
+    insertData<Diagram>(diagram, Stores.Diagrams).then((newDiagram) => {
+      router.push(`?id=${newDiagram.id}`);
+    });
+  };
+
+  const exportDiagram = (format: "jpg" | "png" | "copy") => {
+    const svgElement = diagramContainer.current?.querySelector("svg");
+    if (svgElement) {
+      const svg = new XMLSerializer().serializeToString(svgElement);
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        const img = new Image();
+        img.onload = () => {
+          const viewBox = svgElement.getBBox();
+          canvas.width = viewBox.width;
+          canvas.height = viewBox.height;
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+
+          if (format === "copy") {
+            canvas.toBlob((blob) => {
+              if (blob) {
+                navigator.clipboard.write([
+                  new ClipboardItem({
+                    [blob.type]: blob,
+                  }),
+                ]);
+              }
+            }, "image/png");
+          } else {
+            const dataURL = canvas.toDataURL(`image/${format}`);
+            const link = document.createElement("a");
+            link.href = dataURL;
+            link.download = `${diagramTitle}.${format}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
+        };
+        img.crossOrigin = "anonymous";
+        img.src = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+      }
+    }
+  };
+
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="flex h-16 justify-between shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+          <div className="flex items-center gap-2 px-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <Breadcrumb>
+              <BreadcrumbList className="text-xs md:text-base">
+                {folderTitle ? (
+                  <>
+                    <BreadcrumbItem className="md:block hidden">
+                      <BreadcrumbPage className="">
+                        {folderTitle}
+                      </BreadcrumbPage>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator className="md:block hidden">
+                      <Slash />
+                    </BreadcrumbSeparator>
+                  </>
+                ) : (
+                  ""
+                )}
+                <BreadcrumbItem className="block">
+                  <BreadcrumbPage>{diagramTitle}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+            <Button
+              size={isMobile ? "sm" : "default"}
+              variant="ghost"
+              onClick={handleSave}
+            >
+              <Save /> <span className="hidden md:block">Save</span>
+            </Button>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="auto-save"
+                checked={isAutoSave}
+                onCheckedChange={setIsAutoSave}
+                disabled={!diagramId}
+              />
+              <Label htmlFor="auto-save" className="text-[0.5rem] md:text-base">
+                Auto Save
+              </Label>
+            </div>
+            <p className="text-xs md:text-base ml-2">{saveStatus}</p>
+          </div>
+
+          <div className="flex items-center gap-2 px-4">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size={isMobile ? "sm" : "default"}>
+                  <Upload /> <span className="md:block hidden">Export</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="left" align="start" className="w-40">
+                <DropdownMenuItem onClick={() => exportDiagram("jpg")}>
+                  Export to jpg
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportDiagram("png")}>
+                  Export to png
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportDiagram("copy")}>
+                  Copy as Image
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+        <div className="md:px-4 h-[calc(100svh-4rem)]">
+          <ResizablePanelGroup direction={isMobile ? "vertical" : "horizontal"}>
+            {isMobile ? (
+              <DiagramPanel
+                wrapperRef={transformWrapper}
+                diagramContainerRef={diagramContainer}
+              />
+            ) : (
+              <CodeEditorPanel
+                markdown={markdown}
+                onChange={setMarkdown}
+                error={diagramError}
+              />
+            )}
+            <ResizableHandle withHandle />
+            {isMobile ? (
+              <CodeEditorPanel
+                markdown={markdown}
+                onChange={setMarkdown}
+                error={diagramError}
+              />
+            ) : (
+              <DiagramPanel
+                wrapperRef={transformWrapper}
+                diagramContainerRef={diagramContainer}
+              />
+            )}
+          </ResizablePanelGroup>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      </SidebarInset>
+      {!diagramId && (
+        <CreateDiagramDialog
+          open={createDialogOpen}
+          onOpenChange={setCreateDialogOpen}
+          insertData={insertDiagram}
+        />
+      )}
+    </SidebarProvider>
   );
 }
