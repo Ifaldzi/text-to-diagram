@@ -1,6 +1,4 @@
 import { BaseModel } from "../models/base-model";
-import { Diagram } from "../models/diagram";
-// import { Diagram } from '../models/diagram'
 
 const DB_VERSION = 1;
 const DB_NAME = "diagram-db";

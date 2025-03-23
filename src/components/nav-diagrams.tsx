@@ -73,8 +73,8 @@ export function NavDiagrams() {
           fetchedDiagrams.find((diagram) => diagram.id === id) || null;
         setDiagram(currentDiagram);
       }
-    } catch (error: any) {
-      toast(errorToastProps({ description: error.message }));
+    } catch (error: unknown) {
+      toast(errorToastProps({ description: (error as Error).message }));
     }
   };
 
@@ -83,8 +83,8 @@ export function NavDiagrams() {
       insertData<Diagram>(diagram, Stores.Diagrams).then((newDiagram) => {
         if (!newDiagram.isFolder) router.push(`?id=${newDiagram.id}`);
       });
-    } catch (error: any) {
-      toast(errorToastProps({ description: error.message }));
+    } catch (error: unknown) {
+      toast(errorToastProps({ description: (error as Error).message }));
     }
   };
 
@@ -94,8 +94,8 @@ export function NavDiagrams() {
         fetchDiagrams();
         if (key === id) router.replace("/");
       });
-    } catch (error: any) {
-      toast(errorToastProps({ description: error.message }));
+    } catch (error: unknown) {
+      toast(errorToastProps({ description: (error as Error).message }));
     }
   };
 
@@ -110,8 +110,8 @@ export function NavDiagrams() {
           });
         }
       });
-    } catch (error: any) {
-      toast(errorToastProps({ description: error.message }));
+    } catch (error: unknown) {
+      toast(errorToastProps({ description: (error as Error).message }));
     }
   };
 

@@ -19,7 +19,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <AppSidebarHeader />
       </SidebarHeader>
       <SidebarContent>
-        <NavDiagrams />
+        <React.Suspense>
+          <NavDiagrams />
+        </React.Suspense>
       </SidebarContent>
       <SidebarFooter>
         <NavDocumentaion />
