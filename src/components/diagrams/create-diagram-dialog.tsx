@@ -2,24 +2,15 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { Button } from "@/components/ui/button";
-import { FilePieChart, PieChart, Plus } from "lucide-react";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { Diagram } from "@/data/models/diagram";
 
 interface props {
@@ -39,7 +30,8 @@ export function CreateDiagramDialog({
 }: props) {
   const [title, setTitle] = useState<string>("");
 
-  const addNewDiagram = () => {
+  const addNewDiagram = (event: FormEvent) => {
+    event.preventDefault();
     const newDiagram: Diagram = {
       id: crypto.randomUUID(),
       title: title,
@@ -53,24 +45,24 @@ export function CreateDiagramDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            Create New {isFolder ? "Folder" : "Diagram"}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4">
-          <div>
-            <Label htmlFor="title">Title</Label>
-            <Input id="title" onChange={(e) => setTitle(e.target.value)} />
+        <form onSubmit={addNewDiagram} className="flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle>
+              Create New {isFolder ? "Folder" : "Diagram"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div>
+              <Label htmlFor="title">Title</Label>
+              <Input id="title" onChange={(e) => setTitle(e.target.value)} />
+            </div>
           </div>
-        </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button type="submit" onClick={addNewDiagram}>
-              Save
-            </Button>
-          </DialogClose>
-        </DialogFooter>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="submit">Save</Button>
+            </DialogClose>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

@@ -2,16 +2,14 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 
 interface props {
   open: boolean;
@@ -28,29 +26,35 @@ export function RenameDiagramDialog({
 }: props) {
   const [title, setTitle] = useState<string>(currentTitle);
 
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+
+    onRename(title);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Rename Diagram</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4">
-          <div>
-            <Label htmlFor="title">Title</Label>
-            <Input
-              id="title"
-              onChange={(e) => setTitle(e.target.value)}
-              value={title}
-            />
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle>Rename Diagram</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div>
+              <Label htmlFor="title">Title</Label>
+              <Input
+                id="title"
+                onChange={(e) => setTitle(e.target.value)}
+                value={title}
+              />
+            </div>
           </div>
-        </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button type="submit" onClick={() => onRename(title)}>
-              Save
-            </Button>
-          </DialogClose>
-        </DialogFooter>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="submit">Save</Button>
+            </DialogClose>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

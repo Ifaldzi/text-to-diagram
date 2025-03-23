@@ -11,7 +11,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "./ui/sidebar";
-import { ChevronRight, FileChartPie, Folder, Plus } from "lucide-react";
+import { FileChartPie, Folder } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -19,17 +19,11 @@ import {
 } from "./ui/collapsible";
 import { DiagramNavDto } from "@/data/dto/diagrams/diagram-nav-dto";
 import { Stores } from "@/data/local/indexed-db";
-import { CreateDiagramDialog } from "./diagrams/create-diagram-dialog";
 import { useRouter, useSearchParams } from "next/navigation";
 import { NavDiagramDropdownMenu } from "./diagrams/nav-diagram-dropdown-menu";
-import { Button } from "./ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
 import { CreateDiagramDropdownMenu } from "./diagrams/create-diagram-dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import { errorToastProps } from "@/constants/constant";
 
 export function NavDiagrams() {
   const {
@@ -40,6 +34,7 @@ export function NavDiagrams() {
     getDataByKey,
     isDbLoaded,
   } = useIndexedDb();
+  const { toast } = useToast();
   const [diagrams, setDiagrams] = useState<DiagramNavDto[]>([]);
   const [diagram, setDiagram] = useState<Diagram | null>(null);
 
@@ -49,54 +44,75 @@ export function NavDiagrams() {
   const id = searchParams.get("id");
 
   const fetchDiagrams = async () => {
-    const fetchedDiagrams = await getAllData<Diagram>(Stores.Diagrams);
-    const diagramNavDtos: DiagramNavDto[] = fetchedDiagrams
-      .filter((diagram) => !diagram.parentId)
-      .map((diagram) => ({
-        id: diagram.id,
-        title: diagram.title,
-        isFolder: diagram.isFolder,
-        isActive: false,
-        items: fetchedDiagrams
-          .filter((child) => child.parentId === diagram.id)
-          .map((child) => ({
-            id: child.id,
-            title: child.title,
-            isActive: false,
-          })),
-      }));
-    setDiagrams(diagramNavDtos);
-    if (id) {
-      const currentDiagram =
-        fetchedDiagrams.find((diagram) => diagram.id === id) || null;
-      setDiagram(currentDiagram);
+    try {
+      const fetchedDiagrams = await getAllData<Diagram>(Stores.Diagrams);
+      const diagramNavDtos: DiagramNavDto[] = fetchedDiagrams
+        .filter((diagram) => !diagram.parentId)
+        .sort((a, b) => {
+          if (a.isFolder && !b.isFolder) return -1;
+          if (!a.isFolder && b.isFolder) return 1;
+          return a.title.localeCompare(b.title);
+        })
+        .map((diagram) => ({
+          id: diagram.id,
+          title: diagram.title,
+          isFolder: diagram.isFolder,
+          isActive: false,
+          items: fetchedDiagrams
+            .filter((child) => child.parentId === diagram.id)
+            .sort((a, b) => a.title.localeCompare(b.title))
+            .map((child) => ({
+              id: child.id,
+              title: child.title,
+              isActive: false,
+            })),
+        }));
+      setDiagrams(diagramNavDtos);
+      if (id) {
+        const currentDiagram =
+          fetchedDiagrams.find((diagram) => diagram.id === id) || null;
+        setDiagram(currentDiagram);
+      }
+    } catch (error: any) {
+      toast(errorToastProps({ description: error.message }));
     }
   };
 
   const insertDiagram = (diagram: Diagram) => {
-    insertData<Diagram>(diagram, Stores.Diagrams).then((newDiagram) => {
-      fetchDiagrams();
-      if (!newDiagram.isFolder) router.push(`?id=${newDiagram.id}`);
-    });
+    try {
+      insertData<Diagram>(diagram, Stores.Diagrams).then((newDiagram) => {
+        if (!newDiagram.isFolder) router.push(`?id=${newDiagram.id}`);
+      });
+    } catch (error: any) {
+      toast(errorToastProps({ description: error.message }));
+    }
   };
 
   const deleteDiagram = (key: string) => {
-    deleteDataByKey(Stores.Diagrams, key).then(() => {
-      fetchDiagrams();
-      if (key === id) router.replace("/");
-    });
+    try {
+      deleteDataByKey(Stores.Diagrams, key).then(() => {
+        fetchDiagrams();
+        if (key === id) router.replace("/");
+      });
+    } catch (error: any) {
+      toast(errorToastProps({ description: error.message }));
+    }
   };
 
   const renameDiagram = (key: string, newTitle: string) => {
-    getDataByKey<Diagram>(Stores.Diagrams, key).then((diagram) => {
-      if (diagram) {
-        diagram.title = newTitle;
-        updateData<Diagram>(Stores.Diagrams, diagram).then(() => {
-          fetchDiagrams();
-          if (key === id) router.refresh();
-        });
-      }
-    });
+    try {
+      getDataByKey<Diagram>(Stores.Diagrams, key).then((diagram) => {
+        if (diagram) {
+          diagram.title = newTitle;
+          updateData<Diagram>(Stores.Diagrams, diagram).then(() => {
+            fetchDiagrams();
+            if (key === id) router.refresh();
+          });
+        }
+      });
+    } catch (error: any) {
+      toast(errorToastProps({ description: error.message }));
+    }
   };
 
   useEffect(() => {

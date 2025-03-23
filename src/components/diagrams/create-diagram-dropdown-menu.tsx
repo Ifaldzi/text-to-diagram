@@ -5,17 +5,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { SidebarMenuAction } from "../ui/sidebar";
-import {
-  Edit,
-  FilePieChart,
-  Folder,
-  MoreHorizontal,
-  Plus,
-  Trash,
-} from "lucide-react";
-import { DeleteDiagramDialog } from "./delete-diagram-dialog";
-import { RenameDiagramDialog } from "./rename-diagram-dialog";
+import { FilePieChart, Folder, Plus } from "lucide-react";
 import { Button } from "../ui/button";
 import { CreateDiagramDialog } from "./create-diagram-dialog";
 import { Diagram } from "@/data/models/diagram";

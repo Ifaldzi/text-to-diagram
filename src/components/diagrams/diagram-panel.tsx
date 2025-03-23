@@ -48,7 +48,7 @@ export function DiagramPanel({
   diagramContainerRef,
 }: diagramProps) {
   return (
-    <ResizablePanel className="">
+    <ResizablePanel>
       <TransformWrapper limitToBounds={false} centerOnInit ref={wrapperRef}>
         <TransformComponent wrapperStyle={{ height: "100%", width: "100%" }}>
           <div className="h-full w-full" ref={diagramContainerRef}></div>

@@ -12,34 +12,21 @@ import { Separator } from "@/components/ui/separator";
 import {
   Breadcrumb,
   BreadcrumbItem,
-  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import {
   ResizableHandle,
-  ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import ReactCodeMirror, {
-  basicSetup,
-  EditorState,
-} from "@uiw/react-codemirror";
-import { langs } from "@uiw/codemirror-extensions-langs";
-import { mermaid as mermaidLang } from "codemirror-lang-mermaid";
 import { useIndexedDb } from "@/data/local/use-indexed-db";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Diagram } from "@/data/models/diagram";
 import { Stores } from "@/data/local/indexed-db";
 import { Button } from "@/components/ui/button";
-import { Save, Slash, Store, Upload } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  TransformWrapper,
-  TransformComponent,
-  ReactZoomPanPinchContentRef,
-} from "react-zoom-pan-pinch";
+import { Save, Slash, Upload } from "lucide-react";
+import { ReactZoomPanPinchContentRef } from "react-zoom-pan-pinch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,31 +34,23 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CreateDiagramDialog } from "@/components/diagrams/create-diagram-dialog";
-import { DiagramErrorAlert } from "@/components/diagrams/diagram-error-alert";
-import {
-  indentOnInput,
-  indentUnit,
-  syntaxHighlighting,
-} from "@codemirror/language";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { SAVE_STATUS } from "@/constants/diagram-constant";
+import { DEFAULT_MARKDOWN, SAVE_STATUS } from "@/constants/diagram-constant";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   CodeEditorPanel,
   DiagramPanel,
 } from "@/components/diagrams/diagram-panel";
-
-const defaultDiagram = `graph LR
-  A --- B
-  B-->C[fa:fa-ban forbidden]
-  B-->D(fa:fa-spinner);`;
+import { useToast } from "@/hooks/use-toast";
+import { errorToastProps } from "@/constants/constant";
 
 export default function Home() {
-  const [markdown, setMarkdown] = useState(defaultDiagram);
+  const [markdown, setMarkdown] = useState(DEFAULT_MARKDOWN);
   const diagramContainer = useRef<HTMLDivElement>(null);
   const transformWrapper = useRef<ReactZoomPanPinchContentRef>(null);
   const { getDataByKey, updateData, insertData, isDbLoaded } = useIndexedDb();
+  const { toast } = useToast();
 
   const searchParams = useSearchParams();
   const diagramId = searchParams.get("id");
@@ -79,12 +58,11 @@ export default function Home() {
 
   const [diagramTitle, setDiagramTitle] = useState<string>("Untitled Diagram");
   const [diagram, setDiagram] = useState<Diagram>();
-  // const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState("");
   const [folderTitle, setFolderTitle] = useState<string>("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [diagramError, setDiagramError] = useState("");
-  const [isAutoSave, setIsAutoSave] = useState(true);
+  const [isAutoSave, setIsAutoSave] = useState(false);
   const [autoSaveTimer, setAutoSaveTimer] = useState<
     NodeJS.Timeout | undefined
   >();
@@ -150,35 +128,43 @@ export default function Home() {
   }, [diagramId, isDbLoaded]);
 
   const getDiagram = (key: string) => {
-    getDataByKey<Diagram>(Stores.Diagrams, key).then((diagram) => {
-      if (diagram) {
-        setMarkdown(diagram.content);
-        setDiagramTitle(diagram.title);
-        setDiagram(diagram);
-        if (diagram.parentId) {
-          getDataByKey<Diagram>(Stores.Diagrams, diagram.parentId).then(
-            (parent) => {
-              if (parent) {
-                setFolderTitle(parent.title);
+    try {
+      getDataByKey<Diagram>(Stores.Diagrams, key).then((diagram) => {
+        if (diagram) {
+          setMarkdown(diagram.content);
+          setDiagramTitle(diagram.title);
+          setDiagram(diagram);
+          if (diagram.parentId) {
+            getDataByKey<Diagram>(Stores.Diagrams, diagram.parentId).then(
+              (parent) => {
+                if (parent) {
+                  setFolderTitle(parent.title);
+                }
               }
-            }
-          );
-        } else {
-          setFolderTitle("");
+            );
+          } else {
+            setFolderTitle("");
+          }
         }
-      }
-    });
+      });
+    } catch (error: any) {
+      toast(errorToastProps({ description: error.message }));
+    }
   };
 
   const handleSave = () => {
-    if (!diagramId) {
-      setCreateDialogOpen(true);
-    } else if (diagramId && diagram) {
-      const newDiagram = { ...diagram, content: markdown };
-      setSaveStatus(SAVE_STATUS.SAVING);
-      updateData(Stores.Diagrams, newDiagram).then(() =>
-        setSaveStatus(SAVE_STATUS.SAVED)
-      );
+    try {
+      if (!diagramId) {
+        setCreateDialogOpen(true);
+      } else if (diagramId && diagram) {
+        const newDiagram = { ...diagram, content: markdown };
+        setSaveStatus(SAVE_STATUS.SAVING);
+        updateData(Stores.Diagrams, newDiagram).then(() =>
+          setSaveStatus(SAVE_STATUS.SAVED)
+        );
+      }
+    } catch (error: any) {
+      toast(errorToastProps({ description: error.message }));
     }
   };
 
@@ -193,16 +179,20 @@ export default function Home() {
   };
 
   const setDefault = () => {
-    setMarkdown(defaultDiagram);
+    setMarkdown(DEFAULT_MARKDOWN);
     setDiagramTitle("Untitled Diagram");
     setIsAutoSave(false);
   };
 
   const insertDiagram = (diagram: Diagram) => {
-    diagram.content = markdown;
-    insertData<Diagram>(diagram, Stores.Diagrams).then((newDiagram) => {
-      router.push(`?id=${newDiagram.id}`);
-    });
+    try {
+      diagram.content = markdown;
+      insertData<Diagram>(diagram, Stores.Diagrams).then((newDiagram) => {
+        router.push(`?id=${newDiagram.id}`);
+      });
+    } catch (error: any) {
+      toast(errorToastProps({ description: error.message }));
+    }
   };
 
   const exportDiagram = (format: "jpg" | "png" | "copy") => {
