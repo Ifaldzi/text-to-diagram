@@ -82,6 +82,7 @@ export function NavDiagrams() {
     try {
       insertData<Diagram>(diagram, Stores.Diagrams).then((newDiagram) => {
         if (!newDiagram.isFolder) router.push(`?id=${newDiagram.id}`);
+        else fetchDiagrams();
       });
     } catch (error: unknown) {
       toast(errorToastProps({ description: (error as Error).message }));
